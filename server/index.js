@@ -1,12 +1,46 @@
 import express from "express";
 import cors from "cors";
 import "dotenv/config";
+import { getAllPartsGrouped, addPart, deletePart } from "./db.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
 const API_KEY = process.env.ANTHROPIC_API_KEY;
+
+/* ---------------------------------------------------------
+   PARTS API
+   The catalog lives in bench.db (SQLite), not in frontend code.
+--------------------------------------------------------- */
+app.get("/api/parts", (req, res) => {
+  try {
+    res.json(getAllPartsGrouped());
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not load parts." });
+  }
+});
+
+app.post("/api/parts", (req, res) => {
+  const { id, category, name, price, specs } = req.body || {};
+  if (!id || !category || !name || price == null) {
+    return res.status(400).json({ error: "id, category, name, and price are required." });
+  }
+  try {
+    addPart({ id, category, name, price, specs });
+    res.status(201).json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Could not add part. (Is the id already used?)" });
+  }
+});
+
+app.delete("/api/parts/:id", (req, res) => {
+  const removed = deletePart(req.params.id);
+  if (!removed) return res.status(404).json({ error: "Part not found." });
+  res.json({ ok: true });
+});
 
 app.post("/api/recommend", async (req, res) => {
   if (!API_KEY) {

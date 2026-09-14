@@ -10,55 +10,9 @@ import { Cpu, CircuitBoard, MemoryStick, HardDrive, Zap, Box, Fan, MonitorSmartp
 
 const searchLink = (name) => `https://www.amazon.com/s?k=${encodeURIComponent(name)}`;
 
-const CATALOG = {
-  cpu: [
-    { id: "c1", name: "AMD Ryzen 5 7600", socket: "AM5", ramType: "DDR5", tdp: 65, price: 190, tier: "Budget" },
-    { id: "c2", name: "AMD Ryzen 7 7800X3D", socket: "AM5", ramType: "DDR5", tdp: 120, price: 359, tier: "Gaming" },
-    { id: "c3", name: "AMD Ryzen 9 7950X3D", socket: "AM5", ramType: "DDR5", tdp: 120, price: 549, tier: "High-end" },
-    { id: "c4", name: "Intel Core i5-14600K", socket: "LGA1700", ramType: "DDR5", tdp: 125, price: 269, tier: "Gaming" },
-    { id: "c5", name: "Intel Core i7-14700K", socket: "LGA1700", ramType: "DDR5", tdp: 125, price: 379, tier: "High-end" },
-    { id: "c6", name: "Intel Core i9-14900K", socket: "LGA1700", ramType: "DDR5", tdp: 125, price: 549, tier: "Enthusiast" },
-  ],
-  motherboard: [
-    { id: "m1", name: "MSI PRO B650-P WiFi", socket: "AM5", ramType: "DDR5", formFactor: "ATX", price: 149 },
-    { id: "m2", name: "Gigabyte B650 AORUS Elite AX", socket: "AM5", ramType: "DDR5", formFactor: "ATX", price: 189 },
-    { id: "m3", name: "ASRock B650M-HDV/M.2", socket: "AM5", ramType: "DDR5", formFactor: "mATX", price: 109 },
-    { id: "m4", name: "ASUS Prime Z790-P WiFi", socket: "LGA1700", ramType: "DDR5", formFactor: "ATX", price: 199 },
-    { id: "m5", name: "MSI PRO B760M-A WiFi", socket: "LGA1700", ramType: "DDR5", formFactor: "mATX", price: 139 },
-  ],
-  ram: [
-    { id: "r1", name: "Corsair Vengeance 32GB (2x16GB) DDR5-6000", type: "DDR5", capacity: "32GB", price: 89 },
-    { id: "r2", name: "G.Skill Flare X5 32GB (2x16GB) DDR5-6000", type: "DDR5", capacity: "32GB", price: 94 },
-    { id: "r3", name: "Corsair Vengeance 64GB (2x32GB) DDR5-6000", type: "DDR5", capacity: "64GB", price: 179 },
-  ],
-  gpu: [
-    { id: "g1", name: "MSI RTX 4060 Ventus 2X", tdp: 115, lengthMM: 245, price: 299, tier: "1080p" },
-    { id: "g2", name: "ASUS Dual RTX 4070 Super", tdp: 220, lengthMM: 267, price: 599, tier: "1440p" },
-    { id: "g3", name: "Gigabyte RTX 4080 Super Gaming OC", tdp: 320, lengthMM: 336, price: 999, tier: "4K" },
-    { id: "g4", name: "MSI Radeon RX 7800 XT Gaming X Trio", tdp: 263, lengthMM: 322, price: 499, tier: "1440p" },
-  ],
-  storage: [
-    { id: "s1", name: "WD Black SN770 1TB NVMe SSD", capacity: "1TB", price: 69 },
-    { id: "s2", name: "Samsung 990 Pro 2TB NVMe SSD", capacity: "2TB", price: 149 },
-    { id: "s3", name: "Crucial P3 Plus 4TB NVMe SSD", capacity: "4TB", price: 259 },
-  ],
-  psu: [
-    { id: "p1", name: "Corsair RM650e 650W 80+ Gold", wattage: 650, price: 89 },
-    { id: "p2", name: "EVGA SuperNOVA 750 GT 750W 80+ Gold", wattage: 750, price: 109 },
-    { id: "p3", name: "Corsair RM1000e 1000W 80+ Gold", wattage: 1000, price: 159 },
-  ],
-  case: [
-    { id: "cs1", name: "NZXT H5 Flow", formFactorSupport: ["ATX", "mATX", "ITX"], maxGpuLengthMM: 365, price: 89 },
-    { id: "cs2", name: "Fractal Design Pop Air", formFactorSupport: ["ATX", "mATX", "ITX"], maxGpuLengthMM: 355, price: 99 },
-    { id: "cs3", name: "Cooler Master MasterBox NR200", formFactorSupport: ["ITX"], maxGpuLengthMM: 330, price: 99 },
-  ],
-  cooler: [
-    { id: "co1", name: "Cooler Master Hyper 212 Halo", supportedSockets: ["AM5", "LGA1700"], price: 45 },
-    { id: "co2", name: "Corsair iCUE H100i 240mm AIO", supportedSockets: ["AM5", "LGA1700"], price: 129 },
-    { id: "co3", name: "NZXT Kraken 280mm AIO", supportedSockets: ["AM5", "LGA1700"], price: 169 },
-  ],
-};
-
+// The parts catalog is no longer hardcoded here — it's fetched from
+// GET /api/parts, which reads from the SQLite database (server/db.js).
+// Adding a new part means adding a row to the database, not editing this file.
 const CATEGORY_META = [
   { key: "cpu", label: "Processor", icon: Cpu },
   { key: "motherboard", label: "Motherboard", icon: CircuitBoard },
@@ -102,6 +56,63 @@ function checkCompatibility(build) {
   }
 
   return { issues, estimatedDraw, recommendedWattage };
+}
+
+/* ---------------------------------------------------------
+   BUDGET AUTO-PICKER
+   Allocates a budget across categories by use case, then picks
+   the best-value compatible part in each category.
+--------------------------------------------------------- */
+const USE_CASES = {
+  gaming: {
+    label: "Gaming",
+    weights: { gpu: 0.36, cpu: 0.22, motherboard: 0.08, ram: 0.07, storage: 0.07, psu: 0.07, case: 0.07, cooler: 0.06 },
+  },
+  creator: {
+    label: "Creator / workstation",
+    weights: { cpu: 0.28, gpu: 0.22, ram: 0.14, storage: 0.11, motherboard: 0.09, psu: 0.07, case: 0.05, cooler: 0.04 },
+  },
+  everyday: {
+    label: "Everyday / budget",
+    weights: { cpu: 0.20, gpu: 0.18, motherboard: 0.13, ram: 0.11, storage: 0.13, psu: 0.11, case: 0.08, cooler: 0.06 },
+  },
+};
+
+function pickWithinBudget(pool, target) {
+  if (!pool || pool.length === 0) return null;
+  const sorted = [...pool].sort((a, b) => a.price - b.price);
+  let choice = null;
+  for (const item of sorted) {
+    if (item.price <= target * 1.35) choice = item; // best value that still fits a stretched allocation
+  }
+  return choice || sorted[0]; // fall back to the cheapest option in the category
+}
+
+function autoPickBuildForBudget(catalog, budget, useCaseKey) {
+  const weights = USE_CASES[useCaseKey].weights;
+  const targetFor = (cat) => budget * weights[cat];
+
+  const cpu = pickWithinBudget(catalog.cpu, targetFor("cpu"));
+  const motherboard = pickWithinBudget(catalog.motherboard.filter((m) => m.socket === cpu.socket), targetFor("motherboard"));
+  const ram = pickWithinBudget(catalog.ram.filter((r) => r.type === motherboard.ramType), targetFor("ram"));
+  const gpu = pickWithinBudget(catalog.gpu, targetFor("gpu"));
+  const storage = pickWithinBudget(catalog.storage, targetFor("storage"));
+  const cooler = pickWithinBudget(catalog.cooler.filter((c) => c.supportedSockets.includes(cpu.socket)), targetFor("cooler"));
+
+  const estimatedDraw = (cpu.tdp || 0) + (gpu.tdp || 0) + 120;
+  const recommendedWattage = Math.ceil((estimatedDraw * 1.3) / 50) * 50;
+  const psuPool = catalog.psu.filter((p) => p.wattage >= recommendedWattage);
+  const psu = pickWithinBudget(psuPool, targetFor("psu")) || [...catalog.psu].sort((a, b) => b.wattage - a.wattage)[0];
+
+  const casePool = catalog.case.filter(
+    (c) => c.formFactorSupport.includes(motherboard.formFactor) && c.maxGpuLengthMM >= gpu.lengthMM
+  );
+  const pcCase =
+    pickWithinBudget(casePool, targetFor("case")) ||
+    catalog.case.find((c) => c.formFactorSupport.includes(motherboard.formFactor)) ||
+    catalog.case[0];
+
+  return { cpu, motherboard, ram, gpu, storage, psu, case: pcCase, cooler };
 }
 
 /* ---------------------------------------------------------
@@ -160,6 +171,26 @@ export default function PCBuildTool() {
   const [aiError, setAiError] = useState("");
 
   const [saveFlash, setSaveFlash] = useState(false);
+
+  const [budgetInput, setBudgetInput] = useState("");
+  const [useCase, setUseCase] = useState("gaming");
+  const [autoPicking, setAutoPicking] = useState(false);
+  const [autoPickError, setAutoPickError] = useState("");
+  const [flashCategory, setFlashCategory] = useState(null);
+  const [targetBudget, setTargetBudget] = useState(null);
+
+  const [catalog, setCatalog] = useState(null);
+  const [catalogError, setCatalogError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/parts")
+      .then((res) => {
+        if (!res.ok) throw new Error("Request failed");
+        return res.json();
+      })
+      .then(setCatalog)
+      .catch(() => setCatalogError("Couldn't load the parts catalog. Make sure the backend server is running (npm run server)."));
+  }, []);
 
   useEffect(() => {
     listProfiles().then(setKnownProfiles);
@@ -220,6 +251,29 @@ export default function PCBuildTool() {
 
   const clearPart = (category) => {
     setBuild((prev) => ({ ...prev, [category]: null }));
+  };
+
+  const handleAutoPick = () => {
+    if (!catalog) return;
+    const budget = parseFloat(budgetInput);
+    if (!budget || budget < 300) {
+      setAutoPickError("Enter a realistic budget \u2014 at least $300.");
+      return;
+    }
+    setAutoPickError("");
+    const picks = autoPickBuildForBudget(catalog, budget, useCase);
+    setBuild(emptyBuild());
+    setTargetBudget(budget);
+    setAutoPicking(true);
+    const order = CATEGORY_META.map((c) => c.key);
+    order.forEach((key, i) => {
+      setTimeout(() => {
+        setBuild((prev) => ({ ...prev, [key]: picks[key] }));
+        setFlashCategory(key);
+        setTimeout(() => setFlashCategory((cur) => (cur === key ? null : cur)), 750);
+        if (i === order.length - 1) setAutoPicking(false);
+      }, i * 190);
+    });
   };
 
   const getAIRecommendations = async () => {
@@ -324,8 +378,29 @@ export default function PCBuildTool() {
   }
 
   /* ------------------- RENDER: DASHBOARD ------------------- */
+  if (catalogError) {
+    return (
+      <div style={styles.page}>
+        <FontLoad />
+        <div style={styles.gateWrap}>
+          <div style={styles.gateError}><AlertTriangle size={14} /> {catalogError}</div>
+        </div>
+      </div>
+    );
+  }
+  if (!catalog) {
+    return (
+      <div style={styles.page}>
+        <FontLoad />
+        <div style={styles.gateWrap}>
+          <div style={styles.brandSub}>Loading parts catalog...</div>
+        </div>
+      </div>
+    );
+  }
+
   const activePart = build[activeCategory];
-  const options = CATALOG[activeCategory];
+  const options = catalog[activeCategory] || [];
   const noIssues = compat.issues.length === 0;
 
   return (
@@ -349,11 +424,61 @@ export default function PCBuildTool() {
           </div>
         </div>
 
+        {/* Budget auto-picker */}
+        <div style={styles.autoPanel}>
+          <div style={styles.autoPanelHeader}>
+            <Sparkles size={15} color="var(--copper)" />
+            <span>Build me something</span>
+          </div>
+          <div style={styles.autoPanelRow}>
+            <div style={styles.autoField}>
+              <label style={styles.label}>Budget</label>
+              <div style={styles.budgetInputWrap}>
+                <span style={styles.budgetPrefix}>$</span>
+                <input
+                  style={styles.budgetInput}
+                  type="number"
+                  min="300"
+                  step="50"
+                  value={budgetInput}
+                  onChange={(e) => setBudgetInput(e.target.value)}
+                  placeholder="1500"
+                />
+              </div>
+            </div>
+            <div style={styles.autoField}>
+              <label style={styles.label}>Use case</label>
+              <div style={styles.segmented}>
+                {Object.entries(USE_CASES).map(([key, cfg]) => (
+                  <button
+                    key={key}
+                    onClick={() => setUseCase(key)}
+                    style={{ ...styles.segmentedBtn, ...(useCase === key ? styles.segmentedBtnActive : {}) }}
+                  >
+                    {cfg.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <button style={styles.primaryBtnSmall} onClick={handleAutoPick} disabled={autoPicking}>
+              {autoPicking ? "Building..." : "Generate build"}
+            </button>
+          </div>
+          {autoPickError && <div style={styles.gateError}><AlertTriangle size={14} /> {autoPickError}</div>}
+        </div>
+
         {/* Hero stats */}
         <div style={styles.hero}>
           <div style={styles.heroFigure}>
             <div style={styles.heroLabel}>Build total</div>
             <div style={styles.heroNumber}>${total.toLocaleString()}</div>
+            {targetBudget != null && (
+              <div style={{ ...styles.heroSubtext, color: total <= targetBudget ? "var(--success)" : "var(--danger)" }}>
+                {total <= targetBudget
+                  ? `$${(targetBudget - total).toLocaleString()} under your $${targetBudget.toLocaleString()} budget`
+                  : `$${(total - targetBudget).toLocaleString()} over your $${targetBudget.toLocaleString()} budget`}
+              </div>
+            )}
           </div>
           <div style={styles.heroDivider} />
           <div style={styles.heroFigure}>
@@ -384,11 +509,16 @@ export default function PCBuildTool() {
           <div style={styles.rail}>
             {CATEGORY_META.map(({ key, label, icon: Icon }) => {
               const filled = !!build[key];
+              const justFilled = flashCategory === key;
               return (
                 <button
                   key={key}
                   onClick={() => setActiveCategory(key)}
-                  style={{ ...styles.railItem, ...(activeCategory === key ? styles.railItemActive : {}) }}
+                  style={{
+                    ...styles.railItem,
+                    ...(activeCategory === key ? styles.railItemActive : {}),
+                    ...(justFilled ? { animation: "flashIn 0.75s ease-out" } : {}),
+                  }}
                 >
                   <Icon size={16} strokeWidth={1.6} />
                   <div style={styles.railText}>
@@ -485,6 +615,10 @@ function FontLoad() {
       * { box-sizing: border-box; }
       input:focus, button:focus { outline: 2px solid var(--cyan); outline-offset: 1px; }
       ::placeholder { color: #6b8577; }
+      @keyframes flashIn {
+        0% { box-shadow: 0 0 0 0 rgba(226,47,58,0.55); border-color: var(--copper); background: var(--panel2); }
+        100% { box-shadow: 0 0 0 14px rgba(226,47,58,0); border-color: var(--border); }
+      }
     `}</style>
   );
 }
@@ -567,6 +701,28 @@ const styles = {
     background: "var(--panel)", border: "1px solid var(--border)", color: "var(--text)",
     padding: "6px 10px", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center",
   },
+
+  autoPanel: {
+    background: "var(--panel)", border: "1px solid var(--border)", marginBottom: 16,
+    padding: "14px 16px",
+  },
+  autoPanelHeader: {
+    display: "flex", alignItems: "center", gap: 7, fontSize: 13.5, fontWeight: 500, marginBottom: 12,
+  },
+  autoPanelRow: { display: "flex", alignItems: "flex-end", gap: 16, flexWrap: "wrap" },
+  autoField: { display: "flex", flexDirection: "column", gap: 6 },
+  budgetInputWrap: { display: "flex", alignItems: "center", background: "var(--panel2)", border: "1px solid var(--border)" },
+  budgetPrefix: { padding: "0 0 0 10px", color: "var(--muted)", fontFamily: "'IBM Plex Mono', monospace", fontSize: 14 },
+  budgetInput: {
+    background: "transparent", border: "none", color: "var(--text)", padding: "9px 10px 9px 4px",
+    fontSize: 14, fontFamily: "'IBM Plex Mono', monospace", width: 100,
+  },
+  segmented: { display: "flex", background: "var(--panel2)", border: "1px solid var(--border)" },
+  segmentedBtn: {
+    padding: "9px 12px", background: "transparent", border: "none", color: "var(--muted)",
+    fontFamily: "inherit", fontSize: 12.5, cursor: "pointer", whiteSpace: "nowrap",
+  },
+  segmentedBtnActive: { background: "var(--copper)", color: "#fff" },
 
   hero: {
     display: "flex", alignItems: "stretch", gap: 0,
