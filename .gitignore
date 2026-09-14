@@ -1,3 +1,6 @@
 node_modules
 dist
 .env
+server/bench.db
+server/bench.db-shm
+server/bench.db-wal
