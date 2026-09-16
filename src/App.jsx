@@ -6,6 +6,7 @@ import { checkCompatibility } from "./lib/compatibility";
 import { autoPickBuildForBudget } from "./lib/autoPicker";
 import { loadProfile, saveProfile, listProfiles } from "./lib/profileStorage";
 import { styles } from "./styles";
+import { API_BASE } from "./lib/apiConfig";
 
 import FontLoad from "./components/FontLoad";
 import ProfileGate from "./components/ProfileGate";
@@ -58,7 +59,7 @@ export default function PCBuildTool() {
   const setActiveBuild = mode === "plan" ? setBuild : setCurrentPC;
 
   useEffect(() => {
-    fetch("/api/parts")
+    fetch(`${API_BASE}/api/parts`)
       .then((res) => {
         if (!res.ok) throw new Error("Request failed");
         return res.json();
@@ -182,7 +183,7 @@ export default function PCBuildTool() {
     try {
       // Calls our own backend (server/index.js), which holds the Anthropic
       // API key and forwards the request — the browser never sees the key.
-      const response = await fetch("/api/recommend", {
+      const response = await fetch(`${API_BASE}/api/recommend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),

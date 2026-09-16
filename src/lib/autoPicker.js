@@ -24,7 +24,7 @@ function pickWithinBudget(pool, target) {
   const sorted = [...pool].sort((a, b) => a.price - b.price);
   let choice = null;
   for (const item of sorted) {
-    if (item.price <= target * 1.35) choice = item; // best value that still fits a stretched allocation
+    if (item.price <= target * 1.05) choice = item; // best value that still fits a stretched allocation
   }
   return choice || sorted[0]; // fall back to the cheapest option in the category
 }
