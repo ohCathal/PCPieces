@@ -40,7 +40,7 @@ export default function PartsPanel({ activeCategory, activePart, options, select
       <div style={styles.optionsPanelHeader}>
         <span>{categoryLabel}</span>
         {activePart && (
-          <button style={styles.clearBtn} onClick={clearPart}>
+          <button style={styles.clearBtn} onClick={() => clearPart(activeCategory)}>
             <Trash2 size={12} /> Remove
           </button>
         )}
@@ -76,7 +76,7 @@ export default function PartsPanel({ activeCategory, activePart, options, select
             <div
               key={part.id}
               style={{ ...styles.optionCard, ...(isActive ? styles.optionCardActive : {}) }}
-              onClick={() => selectPart(part)}
+              onClick={() => selectPart(activeCategory, part)}
             >
               <div style={styles.optionMain}>
                 <div style={styles.optionName}>{part.name}</div>
@@ -85,8 +85,8 @@ export default function PartsPanel({ activeCategory, activePart, options, select
               <div style={styles.optionRight}>
                 <div style={styles.optionPrice}>${part.price}</div>
                 
-                  <a href={searchLink(part.name)}
-                  target="_blank"
+                 <a href={searchLink(part.name)}
+                   target="_blank"
                   rel="noreferrer"
                   style={styles.optionLink}
                   onClick={(e) => e.stopPropagation()}

@@ -16,6 +16,7 @@ import BuildHero from "./components/BuildHero";
 import CategoryRail from "./components/CategoryRail";
 import PartsPanel from "./components/PartsPanel";
 import RecommendationsPanel from "./components/RecommendationsPanel";
+import PerformancePanel from "./components/PerformancePanel";
 
 /* ---------------------------------------------------------
    MAIN APP
@@ -294,6 +295,8 @@ export default function PCBuildTool() {
             clearPart={clearPart}
           />
         </div>
+
+        <PerformancePanel build={activeBuild} />
 
         <RecommendationsPanel
           mode={mode}
