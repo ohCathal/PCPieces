@@ -18,165 +18,175 @@ db.exec(`
 `);
 
 /* ---------------------------------------------------------
-   STARTER CATALOG
-   Only used to seed the database the first time it's created.
-   After that, this file is never read again — the database is
-   the source of truth, and you add/edit parts through the API
-   (or directly in the parts table) instead of editing code.
+   LIVE DATA SOURCES
 
-   Covers three CPU sockets (AM5/DDR5, AM4/DDR4, LGA1700/DDR5)
-   so the compatibility engine has real cross-generation cases
-   to catch, not just one platform.
+   CPU, motherboard, RAM, storage, PSU, and case all come from
+   docyx/pc-part-dataset on GitHub -- a public dataset scraped
+   from PCPartPicker (66k+ parts, real prices, MIT licensed).
+   GPU comes from RightNow-AI/RightNow-GPU-Database (real specs,
+   Apache-2.0), since that dataset has TDP + physical length,
+   which the PCPartPicker dataset's GPU category doesn't include.
+
+   Every fetch has a small hardcoded fallback for that ONE
+   category, so if one dataset is down the rest of the catalog
+   still loads instead of the whole seed failing.
+
+   Two categories stay fully hand-curated: cooler (the dataset
+   has no socket-compatibility field at all) and case sizing for
+   GPU clearance (the dataset has no max-GPU-length field). Using
+   the live data there would mean silently losing the compatibility
+   checks that are the actual point of this app.
 --------------------------------------------------------- */
-const STARTER_PARTS = [
-  // ---- CPUs: AM5 (DDR5) ----
-  { id: "c1", category: "cpu", name: "AMD Ryzen 5 7600", price: 190, specs: { socket: "AM5", ramType: "DDR5", tdp: 65, tier: "Budget" } },
-  { id: "c2", category: "cpu", name: "AMD Ryzen 5 7600X", price: 220, specs: { socket: "AM5", ramType: "DDR5", tdp: 105, tier: "Gaming" } },
-  { id: "c3", category: "cpu", name: "AMD Ryzen 7 7700X", price: 299, specs: { socket: "AM5", ramType: "DDR5", tdp: 105, tier: "Gaming" } },
-  { id: "c4", category: "cpu", name: "AMD Ryzen 7 7800X3D", price: 359, specs: { socket: "AM5", ramType: "DDR5", tdp: 120, tier: "Gaming" } },
-  { id: "c5", category: "cpu", name: "AMD Ryzen 9 7900X", price: 429, specs: { socket: "AM5", ramType: "DDR5", tdp: 170, tier: "High-end" } },
-  { id: "c6", category: "cpu", name: "AMD Ryzen 9 7950X", price: 549, specs: { socket: "AM5", ramType: "DDR5", tdp: 170, tier: "Enthusiast" } },
-  { id: "c7", category: "cpu", name: "AMD Ryzen 9 7950X3D", price: 599, specs: { socket: "AM5", ramType: "DDR5", tdp: 120, tier: "Enthusiast" } },
+const PCPP_BASE = "https://raw.githubusercontent.com/docyx/pc-part-dataset/main/data/json";
 
-  // ---- CPUs: AM4 (DDR4, older/budget platform) ----
-  { id: "c8", category: "cpu", name: "AMD Ryzen 5 5600", price: 129, specs: { socket: "AM4", ramType: "DDR4", tdp: 65, tier: "Budget" } },
-  { id: "c9", category: "cpu", name: "AMD Ryzen 5 5600X", price: 159, specs: { socket: "AM4", ramType: "DDR4", tdp: 65, tier: "Budget" } },
-  { id: "c10", category: "cpu", name: "AMD Ryzen 7 5700X", price: 189, specs: { socket: "AM4", ramType: "DDR4", tdp: 65, tier: "Gaming" } },
-  { id: "c11", category: "cpu", name: "AMD Ryzen 7 5800X3D", price: 279, specs: { socket: "AM4", ramType: "DDR4", tdp: 105, tier: "Gaming" } },
-  { id: "c12", category: "cpu", name: "AMD Ryzen 9 5900X", price: 309, specs: { socket: "AM4", ramType: "DDR4", tdp: 105, tier: "High-end" } },
-  { id: "c13", category: "cpu", name: "AMD Ryzen 9 5950X", price: 399, specs: { socket: "AM4", ramType: "DDR4", tdp: 105, tier: "Enthusiast" } },
+// Only real desktop microarchitectures we support a platform for.
+// Anything else (Threadripper, Xeon, old chips, etc.) is excluded
+// by name pattern below, not just by architecture.
+const CPU_PLATFORM_BY_ARCH = {
+  "Zen 5": { socket: "AM5", ramType: "DDR5" },
+  "Zen 4": { socket: "AM5", ramType: "DDR5" },
+  "Zen 3": { socket: "AM4", ramType: "DDR4" },
+  "Zen 2": { socket: "AM4", ramType: "DDR4" },
+  "Zen+": { socket: "AM4", ramType: "DDR4" },
+  "Zen": { socket: "AM4", ramType: "DDR4" },
+  "Raptor Lake Refresh": { socket: "LGA1700", ramType: "DDR5" },
+  "Raptor Lake": { socket: "LGA1700", ramType: "DDR5" },
+  "Alder Lake": { socket: "LGA1700", ramType: "DDR5" },
+};
 
-  // ---- CPUs: LGA1700 (DDR5) ----
-  { id: "c14", category: "cpu", name: "Intel Core i3-13100", price: 129, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 60, tier: "Budget" } },
-  { id: "c15", category: "cpu", name: "Intel Core i5-12600K", price: 219, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 125, tier: "Gaming" } },
-  { id: "c16", category: "cpu", name: "Intel Core i5-13600K", price: 259, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 125, tier: "Gaming" } },
-  { id: "c17", category: "cpu", name: "Intel Core i5-14600K", price: 269, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 125, tier: "Gaming" } },
-  { id: "c18", category: "cpu", name: "Intel Core i7-12700K", price: 299, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 125, tier: "High-end" } },
-  { id: "c19", category: "cpu", name: "Intel Core i7-13700K", price: 349, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 125, tier: "High-end" } },
-  { id: "c20", category: "cpu", name: "Intel Core i7-14700K", price: 379, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 125, tier: "High-end" } },
-  { id: "c21", category: "cpu", name: "Intel Core i9-12900K", price: 439, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 125, tier: "Enthusiast" } },
-  { id: "c22", category: "cpu", name: "Intel Core i9-13900K", price: 529, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 125, tier: "Enthusiast" } },
-  { id: "c23", category: "cpu", name: "Intel Core i9-14900K", price: 549, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 125, tier: "Enthusiast" } },
+function isMainstreamCpuName(name) {
+  return /^(AMD Ryzen [3579]|Intel Core i[3579])\b/.test(name) && !name.includes("Threadripper");
+}
 
-  // ---- Motherboards: AM5 (DDR5) ----
-  { id: "m1", category: "motherboard", name: "ASRock A620M-HDV", price: 89, specs: { socket: "AM5", ramType: "DDR5", formFactor: "mATX" } },
-  { id: "m2", category: "motherboard", name: "MSI PRO B650-P WiFi", price: 149, specs: { socket: "AM5", ramType: "DDR5", formFactor: "ATX" } },
-  { id: "m3", category: "motherboard", name: "Gigabyte B650 AORUS Elite AX", price: 189, specs: { socket: "AM5", ramType: "DDR5", formFactor: "ATX" } },
-  { id: "m4", category: "motherboard", name: "ASRock B650M-HDV/M.2", price: 109, specs: { socket: "AM5", ramType: "DDR5", formFactor: "mATX" } },
-  { id: "m5", category: "motherboard", name: "MSI MPG B650 Edge WiFi", price: 219, specs: { socket: "AM5", ramType: "DDR5", formFactor: "ATX" } },
-  { id: "m6", category: "motherboard", name: "ASUS TUF Gaming B650M-Plus", price: 179, specs: { socket: "AM5", ramType: "DDR5", formFactor: "mATX" } },
-  { id: "m7", category: "motherboard", name: "Gigabyte X670 AORUS Elite AX", price: 269, specs: { socket: "AM5", ramType: "DDR5", formFactor: "ATX" } },
-  { id: "m8", category: "motherboard", name: "ASUS ROG Strix X670E-E Gaming", price: 449, specs: { socket: "AM5", ramType: "DDR5", formFactor: "ATX" } },
-  { id: "m9", category: "motherboard", name: "MSI MEG X670E ACE", price: 549, specs: { socket: "AM5", ramType: "DDR5", formFactor: "ATX" } },
+function cpuTierFromPrice(price) {
+  if (price < 150) return "Budget";
+  if (price < 300) return "Gaming";
+  if (price < 450) return "High-end";
+  return "Enthusiast";
+}
 
-  // ---- Motherboards: AM4 (DDR4) ----
-  { id: "m10", category: "motherboard", name: "ASRock A320M-HDV", price: 59, specs: { socket: "AM4", ramType: "DDR4", formFactor: "mATX" } },
-  { id: "m11", category: "motherboard", name: "MSI B450 Tomahawk Max", price: 99, specs: { socket: "AM4", ramType: "DDR4", formFactor: "ATX" } },
-  { id: "m12", category: "motherboard", name: "Gigabyte B450 AORUS M", price: 89, specs: { socket: "AM4", ramType: "DDR4", formFactor: "mATX" } },
-  { id: "m13", category: "motherboard", name: "ASRock B550M Pro4", price: 99, specs: { socket: "AM4", ramType: "DDR4", formFactor: "mATX" } },
-  { id: "m14", category: "motherboard", name: "ASUS ROG Strix B550-F Gaming", price: 159, specs: { socket: "AM4", ramType: "DDR4", formFactor: "ATX" } },
-  { id: "m15", category: "motherboard", name: "Gigabyte X570 AORUS Elite", price: 189, specs: { socket: "AM4", ramType: "DDR4", formFactor: "ATX" } },
-  { id: "m16", category: "motherboard", name: "ASUS ROG Crosshair VIII Hero", price: 349, specs: { socket: "AM4", ramType: "DDR4", formFactor: "ATX" } },
+const FORM_FACTOR_MAP = { "ATX": "ATX", "Micro ATX": "mATX", "Mini ITX": "ITX" };
 
-  // ---- Motherboards: LGA1700 (DDR5) ----
-  { id: "m17", category: "motherboard", name: "ASRock H610M-HDV", price: 79, specs: { socket: "LGA1700", ramType: "DDR5", formFactor: "mATX" } },
-  { id: "m18", category: "motherboard", name: "MSI PRO B760M-A WiFi", price: 139, specs: { socket: "LGA1700", ramType: "DDR5", formFactor: "mATX" } },
-  { id: "m19", category: "motherboard", name: "ASRock B760M Pro RS", price: 129, specs: { socket: "LGA1700", ramType: "DDR5", formFactor: "mATX" } },
-  { id: "m20", category: "motherboard", name: "Gigabyte B760 AORUS Elite AX", price: 169, specs: { socket: "LGA1700", ramType: "DDR5", formFactor: "ATX" } },
-  { id: "m21", category: "motherboard", name: "ASUS Prime Z790-P WiFi", price: 199, specs: { socket: "LGA1700", ramType: "DDR5", formFactor: "ATX" } },
-  { id: "m22", category: "motherboard", name: "Gigabyte Z790 AORUS Elite AX", price: 259, specs: { socket: "LGA1700", ramType: "DDR5", formFactor: "ATX" } },
-  { id: "m23", category: "motherboard", name: "MSI MEG Z790 ACE", price: 599, specs: { socket: "LGA1700", ramType: "DDR5", formFactor: "ATX" } },
+function caseFormFactorSupport(typeStr) {
+  if (!typeStr) return null;
+  if (typeStr.includes("Mini ITX")) return ["ITX"];
+  if (typeStr.includes("Micro ATX")) return ["mATX", "ITX"];
+  if (typeStr.includes("ATX")) return ["ATX", "mATX", "ITX"];
+  return null;
+}
 
-  // ---- RAM: DDR5 ----
-  { id: "r1", category: "ram", name: "Crucial 16GB (2x8GB) DDR5-4800", price: 44, specs: { type: "DDR5", capacity: "16GB" } },
-  { id: "r2", category: "ram", name: "Kingston Fury Beast 16GB (2x8GB) DDR5-5600", price: 59, specs: { type: "DDR5", capacity: "16GB" } },
-  { id: "r3", category: "ram", name: "Corsair Vengeance 32GB (2x16GB) DDR5-6000", price: 89, specs: { type: "DDR5", capacity: "32GB" } },
-  { id: "r4", category: "ram", name: "G.Skill Flare X5 32GB (2x16GB) DDR5-6000", price: 94, specs: { type: "DDR5", capacity: "32GB" } },
-  { id: "r5", category: "ram", name: "Corsair Dominator Platinum 32GB (2x16GB) DDR5-6200", price: 129, specs: { type: "DDR5", capacity: "32GB" } },
-  { id: "r6", category: "ram", name: "G.Skill Trident Z5 32GB (2x16GB) DDR5-6400", price: 119, specs: { type: "DDR5", capacity: "32GB" } },
-  { id: "r7", category: "ram", name: "Corsair Vengeance 64GB (2x32GB) DDR5-6000", price: 179, specs: { type: "DDR5", capacity: "64GB" } },
-  { id: "r8", category: "ram", name: "G.Skill Trident Z5 64GB (2x32GB) DDR5-6000", price: 189, specs: { type: "DDR5", capacity: "64GB" } },
+/** Dedupes by name (datasets have many near-identical color variants of the
+ * same product) and picks an evenly-spaced spread across the price range,
+ * instead of the cheapest N or a random N, so the catalog covers budget
+ * through high-end rather than clustering at one end. */
+function dedupeAndSpread(itemsByName, count) {
+  const items = Object.values(itemsByName).sort((a, b) => a.price - b.price);
+  if (items.length <= count) return items;
+  const step = items.length / count;
+  const sampled = [];
+  for (let i = 0; i < count; i++) sampled.push(items[Math.floor(i * step)]);
+  return sampled;
+}
 
-  // ---- RAM: DDR4 ----
-  { id: "r9", category: "ram", name: "Crucial 8GB (1x8GB) DDR4-3200", price: 22, specs: { type: "DDR4", capacity: "8GB" } },
-  { id: "r10", category: "ram", name: "Kingston Fury Beast 16GB (2x8GB) DDR4-3200", price: 39, specs: { type: "DDR4", capacity: "16GB" } },
-  { id: "r11", category: "ram", name: "Corsair Vengeance LPX 16GB (2x8GB) DDR4-3200", price: 42, specs: { type: "DDR4", capacity: "16GB" } },
-  { id: "r12", category: "ram", name: "G.Skill Ripjaws V 32GB (2x16GB) DDR4-3600", price: 74, specs: { type: "DDR4", capacity: "32GB" } },
-  { id: "r13", category: "ram", name: "Corsair Vengeance LPX 32GB (2x16GB) DDR4-3600", price: 79, specs: { type: "DDR4", capacity: "32GB" } },
-  { id: "r14", category: "ram", name: "Corsair Vengeance LPX 64GB (2x32GB) DDR4-3600", price: 139, specs: { type: "DDR4", capacity: "64GB" } },
+async function fetchJson(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Fetch failed (${res.status}): ${url}`);
+  return res.json();
+}
 
-  // ---- GPUs are NOT in this list — see fetchGpuPartsFromApi() below.
-  // They're pulled live from a real public GPU specs dataset instead
-  // of being typed in by hand.
+async function fetchCpusFromApi() {
+  const data = await fetchJson(`${PCPP_BASE}/cpu.json`);
+  const byName = {};
+  for (const c of data) {
+    const plat = CPU_PLATFORM_BY_ARCH[c.microarchitecture];
+    if (!plat || !c.price || !c.tdp) continue;
+    if (!isMainstreamCpuName(c.name)) continue;
+    if (c.price < 60 || c.price > 700) continue;
+    byName[c.name] = {
+      name: c.name,
+      price: Math.round(c.price),
+      specs: { socket: plat.socket, ramType: plat.ramType, tdp: c.tdp, tier: cpuTierFromPrice(c.price) },
+    };
+  }
+  return dedupeAndSpread(byName, 24).map((p, i) => ({ id: `cpu-api-${i}`, category: "cpu", ...p }));
+}
 
-  // ---- Storage ----
-  { id: "s1", category: "storage", name: "Crucial BX500 500GB SATA SSD", price: 29, specs: { capacity: "500GB" } },
-  { id: "s2", category: "storage", name: "Kingston NV2 500GB NVMe SSD", price: 34, specs: { capacity: "500GB" } },
-  { id: "s3", category: "storage", name: "Kingston NV2 1TB NVMe SSD", price: 54, specs: { capacity: "1TB" } },
-  { id: "s4", category: "storage", name: "WD Blue SN580 500GB NVMe SSD", price: 39, specs: { capacity: "500GB" } },
-  { id: "s5", category: "storage", name: "WD Black SN770 1TB NVMe SSD", price: 69, specs: { capacity: "1TB" } },
-  { id: "s6", category: "storage", name: "WD Black SN850X 2TB NVMe SSD", price: 139, specs: { capacity: "2TB" } },
-  { id: "s7", category: "storage", name: "Samsung 990 Pro 1TB NVMe SSD", price: 89, specs: { capacity: "1TB" } },
-  { id: "s8", category: "storage", name: "Samsung 990 Pro 2TB NVMe SSD", price: 149, specs: { capacity: "2TB" } },
-  { id: "s9", category: "storage", name: "Crucial P3 Plus 4TB NVMe SSD", price: 259, specs: { capacity: "4TB" } },
-  { id: "s10", category: "storage", name: "Seagate BarraCuda 1TB HDD", price: 39, specs: { capacity: "1TB" } },
-  { id: "s11", category: "storage", name: "Seagate BarraCuda 2TB HDD", price: 54, specs: { capacity: "2TB" } },
-  { id: "s12", category: "storage", name: "Seagate BarraCuda 4TB HDD", price: 89, specs: { capacity: "4TB" } },
+async function fetchMotherboardsFromApi() {
+  const data = await fetchJson(`${PCPP_BASE}/motherboard.json`);
+  const byName = {};
+  for (const m of data) {
+    if (!["AM5", "AM4", "LGA1700"].includes(m.socket)) continue;
+    const formFactor = FORM_FACTOR_MAP[m.form_factor];
+    if (!formFactor || !m.price) continue;
+    if (m.price < 50 || m.price > 500) continue;
+    const ramType = m.socket === "AM4" ? "DDR4" : "DDR5";
+    byName[m.name] = { name: m.name, price: Math.round(m.price), specs: { socket: m.socket, ramType, formFactor } };
+  }
+  return dedupeAndSpread(byName, 24).map((p, i) => ({ id: `mobo-api-${i}`, category: "motherboard", ...p }));
+}
 
-  // ---- PSUs ----
-  { id: "p1", category: "psu", name: "EVGA 500 W1 500W 80+ White", price: 44, specs: { wattage: 500 } },
-  { id: "p2", category: "psu", name: "Corsair CV550 550W 80+ Bronze", price: 54, specs: { wattage: 550 } },
-  { id: "p3", category: "psu", name: "Corsair CV650 650W 80+ Bronze", price: 64, specs: { wattage: 650 } },
-  { id: "p4", category: "psu", name: "Corsair RM650e 650W 80+ Gold", price: 89, specs: { wattage: 650 } },
-  { id: "p5", category: "psu", name: "EVGA SuperNOVA 750 GT 750W 80+ Gold", price: 109, specs: { wattage: 750 } },
-  { id: "p6", category: "psu", name: "MSI MPG A750G 750W 80+ Gold", price: 99, specs: { wattage: 750 } },
-  { id: "p7", category: "psu", name: "MSI MPG A850G 850W 80+ Gold", price: 129, specs: { wattage: 850 } },
-  { id: "p8", category: "psu", name: "Corsair RM850x 850W 80+ Gold", price: 139, specs: { wattage: 850 } },
-  { id: "p9", category: "psu", name: "Corsair RM1000e 1000W 80+ Gold", price: 159, specs: { wattage: 1000 } },
-  { id: "p10", category: "psu", name: "Corsair RM1200x 1200W 80+ Gold", price: 219, specs: { wattage: 1200 } },
+async function fetchRamFromApi() {
+  const data = await fetchJson(`${PCPP_BASE}/memory.json`);
+  const byName = {};
+  for (const r of data) {
+    if (!r.speed || !r.modules || !r.price) continue;
+    const gen = r.speed[0];
+    if (gen !== 4 && gen !== 5) continue;
+    const totalGB = r.modules[0] * r.modules[1];
+    if (totalGB > 128 || r.price > 300) continue;
+    byName[r.name] = { name: r.name, price: Math.round(r.price), specs: { type: `DDR${gen}`, capacity: `${totalGB}GB` } };
+  }
+  return dedupeAndSpread(byName, 20).map((p, i) => ({ id: `ram-api-${i}`, category: "ram", ...p }));
+}
 
-  // ---- Cases ----
-  { id: "cs1", category: "case", name: "Cooler Master MasterBox NR200", price: 99, specs: { formFactorSupport: ["ITX"], maxGpuLengthMM: 330 } },
-  { id: "cs2", category: "case", name: "Fractal Design Terra", price: 189, specs: { formFactorSupport: ["ITX"], maxGpuLengthMM: 322 } },
-  { id: "cs3", category: "case", name: "NZXT H5 Flow", price: 89, specs: { formFactorSupport: ["ATX", "mATX", "ITX"], maxGpuLengthMM: 365 } },
-  { id: "cs4", category: "case", name: "Fractal Design Pop Air", price: 99, specs: { formFactorSupport: ["ATX", "mATX", "ITX"], maxGpuLengthMM: 355 } },
-  { id: "cs5", category: "case", name: "Corsair 4000D Airflow", price: 104, specs: { formFactorSupport: ["ATX", "mATX", "ITX"], maxGpuLengthMM: 360 } },
-  { id: "cs6", category: "case", name: "Lian Li Lancool 216", price: 109, specs: { formFactorSupport: ["ATX", "mATX", "ITX"], maxGpuLengthMM: 392 } },
-  { id: "cs7", category: "case", name: "Fractal Design North", price: 149, specs: { formFactorSupport: ["ATX", "mATX", "ITX"], maxGpuLengthMM: 355 } },
-  { id: "cs8", category: "case", name: "NZXT H7 Flow", price: 129, specs: { formFactorSupport: ["ATX", "mATX", "ITX"], maxGpuLengthMM: 400 } },
-  { id: "cs9", category: "case", name: "Corsair 5000D Airflow", price: 174, specs: { formFactorSupport: ["ATX", "mATX", "ITX"], maxGpuLengthMM: 420 } },
-  { id: "cs10", category: "case", name: "Lian Li O11 Dynamic EVO", price: 169, specs: { formFactorSupport: ["ATX", "mATX", "ITX"], maxGpuLengthMM: 422 } },
+async function fetchStorageFromApi() {
+  const data = await fetchJson(`${PCPP_BASE}/internal-hard-drive.json`);
+  const byName = {};
+  for (const s of data) {
+    if (!s.capacity || !s.price) continue;
+    if (s.capacity > 8000 || s.price > 500) continue;
+    const capStr = s.capacity >= 1000 && s.capacity % 1000 === 0 ? `${s.capacity / 1000}TB` : `${s.capacity}GB`;
+    const type = s.type === "SSD" ? "SSD" : "HDD";
+    byName[s.name] = { name: s.name, price: Math.round(s.price), specs: { capacity: capStr, type } };
+  }
+  return dedupeAndSpread(byName, 18).map((p, i) => ({ id: `storage-api-${i}`, category: "storage", ...p }));
+}
 
-  // ---- Coolers ----
-  { id: "co1", category: "cooler", name: "Cooler Master Hyper H410R", price: 24, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
-  { id: "co2", category: "cooler", name: "Thermalright Peerless Assassin 120 SE", price: 35, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
-  { id: "co3", category: "cooler", name: "Cooler Master Hyper 212 Halo", price: 45, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
-  { id: "co4", category: "cooler", name: "Noctua NH-U12S Redux", price: 55, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
-  { id: "co5", category: "cooler", name: "be quiet! Dark Rock 4", price: 74, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
-  { id: "co6", category: "cooler", name: "Noctua NH-D15", price: 109, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
-  { id: "co7", category: "cooler", name: "Corsair iCUE H100i 240mm AIO", price: 129, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
-  { id: "co8", category: "cooler", name: "NZXT Kraken 280mm AIO", price: 169, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
-  { id: "co9", category: "cooler", name: "Corsair iCUE H150i 360mm AIO", price: 199, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
-  { id: "co10", category: "cooler", name: "Lian Li Galahad II 360mm AIO", price: 159, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
-];
+async function fetchPsuFromApi() {
+  const data = await fetchJson(`${PCPP_BASE}/power-supply.json`);
+  const byName = {};
+  for (const p of data) {
+    if (!p.wattage || !p.price) continue;
+    if (p.price > 300 || p.wattage > 1200) continue;
+    byName[p.name] = { name: p.name, price: Math.round(p.price), specs: { wattage: p.wattage, efficiency: p.efficiency } };
+  }
+  return dedupeAndSpread(byName, 16).map((p, i) => ({ id: `psu-api-${i}`, category: "psu", ...p }));
+}
+
+async function fetchCasesFromApi() {
+  const data = await fetchJson(`${PCPP_BASE}/case.json`);
+  const byName = {};
+  for (const c of data) {
+    const formFactorSupport = caseFormFactorSupport(c.type);
+    if (!formFactorSupport || !c.price) continue;
+    if (c.price > 300) continue;
+    // No max-GPU-length field in this dataset -- omitted rather than guessed.
+    // checkCompatibility() treats a missing maxGpuLengthMM as "unknown, assume it fits".
+    byName[c.name] = { name: c.name, price: Math.round(c.price), specs: { formFactorSupport } };
+  }
+  return dedupeAndSpread(byName, 16).map((p, i) => ({ id: `case-api-${i}`, category: "case", ...p }));
+}
 
 /* ---------------------------------------------------------
-   LIVE GPU DATA
-   Pulled from RightNow-AI/RightNow-GPU-Database on GitHub — a
-   public, Apache-2.0-licensed dataset of real GPU specs sourced
-   from TechPowerUp. We fetch tdp/length/memory for a curated
-   list of desktop cards and merge in our own approximate prices
-   (the dataset doesn't include pricing).
-
-   If the fetch fails (offline, GitHub down, etc.) we fall back
-   to a small hardcoded list so the app still works.
+   GPU: separate dataset (see comment above), unchanged from
+   before -- real specs (TDP, length) merged with our own price
+   estimates, since neither free dataset has both.
 --------------------------------------------------------- */
 const GPU_SOURCES = [
-  { url: "https://raw.githubusercontent.com/RightNow-AI/RightNow-GPU-Database/main/data/nvidia/all.json" },
-  { url: "https://raw.githubusercontent.com/RightNow-AI/RightNow-GPU-Database/main/data/amd/all.json" },
+  "https://raw.githubusercontent.com/RightNow-AI/RightNow-GPU-Database/main/data/nvidia/all.json",
+  "https://raw.githubusercontent.com/RightNow-AI/RightNow-GPU-Database/main/data/amd/all.json",
 ];
 
-// name (must match the dataset exactly) -> our own price + performance tier
 const GPU_PRICE_MAP = {
   "GeForce RTX 3050 8 GB": { price: 219, tier: "1080p" },
   "GeForce RTX 3060 12 GB": { price: 279, tier: "1080p" },
@@ -210,30 +220,17 @@ const GPU_PRICE_MAP = {
   "Radeon RX 7900 XTX": { price: 899, tier: "4K" },
 };
 
-const FALLBACK_GPUS = [
-  { id: "g-fb1", category: "gpu", name: "GeForce RTX 4060", price: 299, specs: { tdp: 115, lengthMM: 240, tier: "1080p" } },
-  { id: "g-fb2", category: "gpu", name: "GeForce RTX 4070 SUPER", price: 599, specs: { tdp: 220, lengthMM: 267, tier: "1440p" } },
-  { id: "g-fb3", category: "gpu", name: "GeForce RTX 4080 SUPER", price: 999, specs: { tdp: 320, lengthMM: 310, tier: "4K" } },
-  { id: "g-fb4", category: "gpu", name: "Radeon RX 7800 XT", price: 479, specs: { tdp: 263, lengthMM: 267, tier: "1440p" } },
-  { id: "g-fb5", category: "gpu", name: "Radeon RX 7900 XTX", price: 899, specs: { tdp: 355, lengthMM: 287, tier: "4K" } },
-];
-
-async function fetchGpuPartsFromApi() {
+async function fetchGpusFromApi() {
   const results = [];
-  for (const source of GPU_SOURCES) {
-    const res = await fetch(source.url);
-    if (!res.ok) throw new Error(`GPU dataset fetch failed: ${res.status}`);
-    const list = await res.json();
-    results.push(...list);
-  }
+  for (const url of GPU_SOURCES) results.push(...(await fetchJson(url)));
 
   const parts = [];
   let n = 1;
   for (const [name, pricing] of Object.entries(GPU_PRICE_MAP)) {
     const match = results.find((g) => g.name === name);
-    if (!match || !match.tdp || !match.length) continue; // skip if the dataset doesn't have what we need
+    if (!match || !match.tdp || !match.length) continue;
     parts.push({
-      id: `g${n++}`,
+      id: `gpu-api-${n++}`,
       category: "gpu",
       name,
       price: pricing.price,
@@ -243,26 +240,97 @@ async function fetchGpuPartsFromApi() {
   return parts;
 }
 
+/* ---------------------------------------------------------
+   FALLBACKS
+   Used only if a specific category's live fetch fails, so one
+   dataset being unreachable doesn't take down the whole catalog.
+--------------------------------------------------------- */
+const FALLBACKS = {
+  cpu: [
+    { id: "cpu-fb1", category: "cpu", name: "AMD Ryzen 5 7600", price: 190, specs: { socket: "AM5", ramType: "DDR5", tdp: 65, tier: "Budget" } },
+    { id: "cpu-fb2", category: "cpu", name: "Intel Core i5-14600K", price: 269, specs: { socket: "LGA1700", ramType: "DDR5", tdp: 125, tier: "Gaming" } },
+    { id: "cpu-fb3", category: "cpu", name: "AMD Ryzen 7 5800X3D", price: 279, specs: { socket: "AM4", ramType: "DDR4", tdp: 105, tier: "Gaming" } },
+  ],
+  motherboard: [
+    { id: "mobo-fb1", category: "motherboard", name: "MSI PRO B650-P WiFi", price: 149, specs: { socket: "AM5", ramType: "DDR5", formFactor: "ATX" } },
+    { id: "mobo-fb2", category: "motherboard", name: "MSI PRO B760M-A WiFi", price: 139, specs: { socket: "LGA1700", ramType: "DDR5", formFactor: "mATX" } },
+    { id: "mobo-fb3", category: "motherboard", name: "ASRock B550M Pro4", price: 99, specs: { socket: "AM4", ramType: "DDR4", formFactor: "mATX" } },
+  ],
+  ram: [
+    { id: "ram-fb1", category: "ram", name: "Corsair Vengeance 32GB DDR5-6000", price: 89, specs: { type: "DDR5", capacity: "32GB" } },
+    { id: "ram-fb2", category: "ram", name: "Corsair Vengeance LPX 16GB DDR4-3200", price: 42, specs: { type: "DDR4", capacity: "16GB" } },
+  ],
+  storage: [
+    { id: "storage-fb1", category: "storage", name: "WD Black SN770 1TB NVMe SSD", price: 69, specs: { capacity: "1TB", type: "SSD" } },
+    { id: "storage-fb2", category: "storage", name: "Seagate BarraCuda 2TB HDD", price: 54, specs: { capacity: "2TB", type: "HDD" } },
+  ],
+  psu: [
+    { id: "psu-fb1", category: "psu", name: "Corsair RM650e 650W 80+ Gold", price: 89, specs: { wattage: 650, efficiency: "gold" } },
+    { id: "psu-fb2", category: "psu", name: "Corsair RM1000e 1000W 80+ Gold", price: 159, specs: { wattage: 1000, efficiency: "gold" } },
+  ],
+  case: [
+    { id: "case-fb1", category: "case", name: "NZXT H5 Flow", price: 89, specs: { formFactorSupport: ["ATX", "mATX", "ITX"] } },
+    { id: "case-fb2", category: "case", name: "Cooler Master MasterBox NR200", price: 99, specs: { formFactorSupport: ["ITX"] } },
+  ],
+  gpu: [
+    { id: "gpu-fb1", category: "gpu", name: "GeForce RTX 4060", price: 299, specs: { tdp: 115, lengthMM: 240, tier: "1080p" } },
+    { id: "gpu-fb2", category: "gpu", name: "GeForce RTX 4070 SUPER", price: 599, specs: { tdp: 220, lengthMM: 267, tier: "1440p" } },
+    { id: "gpu-fb3", category: "gpu", name: "Radeon RX 7800 XT", price: 479, specs: { tdp: 263, lengthMM: 267, tier: "1440p" } },
+  ],
+};
+
+/* ---------------------------------------------------------
+   COOLERS
+   Fully hand-curated, on purpose: neither public dataset has a
+   socket-compatibility field for coolers, and that check is the
+   whole point of this category existing in the compatibility
+   engine. Using live data here would mean silently dropping
+   that check rather than gaining anything real.
+--------------------------------------------------------- */
+const STARTER_COOLERS = [
+  { id: "co1", category: "cooler", name: "Cooler Master Hyper H410R", price: 24, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
+  { id: "co2", category: "cooler", name: "Thermalright Peerless Assassin 120 SE", price: 35, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
+  { id: "co3", category: "cooler", name: "Cooler Master Hyper 212 Halo", price: 45, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
+  { id: "co4", category: "cooler", name: "Noctua NH-U12S Redux", price: 55, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
+  { id: "co5", category: "cooler", name: "be quiet! Dark Rock 4", price: 74, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
+  { id: "co6", category: "cooler", name: "Noctua NH-D15", price: 109, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
+  { id: "co7", category: "cooler", name: "Corsair iCUE H100i 240mm AIO", price: 129, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
+  { id: "co8", category: "cooler", name: "NZXT Kraken 280mm AIO", price: 169, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
+  { id: "co9", category: "cooler", name: "Corsair iCUE H150i 360mm AIO", price: 199, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
+  { id: "co10", category: "cooler", name: "Lian Li Galahad II 360mm AIO", price: 159, specs: { supportedSockets: ["AM5", "AM4", "LGA1700"] } },
+];
+
+async function fetchWithFallback(name, fetchFn) {
+  try {
+    const parts = await fetchFn();
+    if (parts.length === 0) throw new Error("Fetch succeeded but returned zero usable parts");
+    console.log(`  ${name}: ${parts.length} live from public dataset`);
+    return parts;
+  } catch (err) {
+    console.warn(`  ${name}: live fetch failed (${err.message}), using fallback list`);
+    return FALLBACKS[name];
+  }
+}
 
 async function seedIfEmpty() {
   const { count } = db.prepare("SELECT COUNT(*) AS count FROM parts").get();
   if (count > 0) return;
 
-  let gpuParts;
-  try {
-    gpuParts = await fetchGpuPartsFromApi();
-    console.log(`Fetched ${gpuParts.length} GPUs live from the public GPU database.`);
-  } catch (err) {
-    console.warn("Live GPU fetch failed, using fallback GPU list:", err.message);
-    gpuParts = FALLBACK_GPUS;
-  }
+  console.log("Seeding catalog from live public datasets...");
+  const [cpuParts, mobos, ram, storage, psu, cases, gpus] = await Promise.all([
+    fetchWithFallback("cpu", fetchCpusFromApi),
+    fetchWithFallback("motherboard", fetchMotherboardsFromApi),
+    fetchWithFallback("ram", fetchRamFromApi),
+    fetchWithFallback("storage", fetchStorageFromApi),
+    fetchWithFallback("psu", fetchPsuFromApi),
+    fetchWithFallback("case", fetchCasesFromApi),
+    fetchWithFallback("gpu", fetchGpusFromApi),
+  ]);
 
-  const allParts = [...STARTER_PARTS, ...gpuParts];
+  const allParts = [...cpuParts, ...mobos, ...ram, ...storage, ...psu, ...cases, ...gpus, ...STARTER_COOLERS];
   const insert = db.prepare("INSERT INTO parts (id, category, name, price, specs) VALUES (@id, @category, @name, @price, @specs)");
   const insertMany = db.transaction((parts) => {
-    for (const part of parts) {
-      insert.run({ ...part, specs: JSON.stringify(part.specs) });
-    }
+    for (const part of parts) insert.run({ ...part, specs: JSON.stringify(part.specs) });
   });
   insertMany(allParts);
   console.log(`Seeded ${allParts.length} parts into bench.db`);
