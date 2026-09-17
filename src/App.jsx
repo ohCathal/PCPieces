@@ -17,6 +17,7 @@ import CategoryRail from "./components/CategoryRail";
 import PartsPanel from "./components/PartsPanel";
 import RecommendationsPanel from "./components/RecommendationsPanel";
 import PerformancePanel from "./components/PerformancePanel";
+import GlobalAnimations from "./components/GlobalAnimations";
 
 /* ---------------------------------------------------------
    MAIN APP
@@ -223,6 +224,7 @@ export default function PCBuildTool() {
     return (
       <div style={styles.page}>
         <FontLoad />
+        <GlobalAnimations />
         <div style={styles.gateWrap}>
           <div style={styles.gateError}>{catalogError}</div>
         </div>
@@ -233,6 +235,7 @@ export default function PCBuildTool() {
     return (
       <div style={styles.page}>
         <FontLoad />
+        <GlobalAnimations />
         <div style={styles.gateWrap}>
           <div style={styles.brandSub}>Loading parts catalog...</div>
         </div>
@@ -246,6 +249,7 @@ export default function PCBuildTool() {
   return (
     <div style={styles.page}>
       <FontLoad />
+      <GlobalAnimations />
       <div style={styles.shell}>
         {/* Top bar */}
         <div style={styles.topBar}>
