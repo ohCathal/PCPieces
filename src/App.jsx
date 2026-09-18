@@ -1,40 +1,37 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
-import { CircuitBoard, LogOut, User } from "lucide-react";
+import { CircuitBoard, LogOut, User, LogIn } from "lucide-react";
 
 import { CATEGORY_META, emptyBuild } from "./lib/catalog";
 import { checkCompatibility } from "./lib/compatibility";
 import { autoPickBuildForBudget } from "./lib/autoPicker";
-import { loadProfile, saveProfile, listProfiles } from "./lib/profileStorage";
+import { fetchCurrentUser, fetchProfileData, saveProfileData, logout as authLogout } from "./lib/auth";
 import { styles } from "./styles";
 import { API_BASE } from "./lib/apiConfig";
 
 import FontLoad from "./components/FontLoad";
-import ProfileGate from "./components/ProfileGate";
+import GlobalAnimations from "./components/GlobalAnimations";
+import AuthModal from "./components/AuthModal";
 import ModeTabs from "./components/ModeTabs";
 import AutoPickerPanel from "./components/AutoPickerPanel";
 import BuildHero from "./components/BuildHero";
 import CategoryRail from "./components/CategoryRail";
 import PartsPanel from "./components/PartsPanel";
-import RecommendationsPanel from "./components/RecommendationsPanel";
 import PerformancePanel from "./components/PerformancePanel";
-import GlobalAnimations from "./components/GlobalAnimations";
+import RecommendationsPanel from "./components/RecommendationsPanel";
 
 /* ---------------------------------------------------------
    MAIN APP
-   This component owns all state and the handlers that touch
-   more than one piece of it (profiles, save/load, the AI call).
-   Everything else — rendering a single section of the screen —
-   lives in its own file under src/components.
+   No forced login: the tool is usable immediately. A profile is
+   only needed to persist a build across visits, so the sign-in
+   modal only appears when the user actually tries to save while
+   logged out -- not before they've done anything.
 --------------------------------------------------------- */
 export default function PCBuildTool() {
-  const [stage, setStage] = useState("gate"); // gate | dashboard
-  const [knownProfiles, setKnownProfiles] = useState([]);
-  const [usernameInput, setUsernameInput] = useState("");
-  const [pinInput, setPinInput] = useState("");
-  const [gateError, setGateError] = useState("");
-  const [gateMode, setGateMode] = useState("select"); // select | create
-
   const [activeUser, setActiveUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [pendingSaveAfterAuth, setPendingSaveAfterAuth] = useState(false);
+
   const [build, setBuild] = useState(emptyBuild());
   const [activeCategory, setActiveCategory] = useState("cpu");
 
@@ -43,6 +40,7 @@ export default function PCBuildTool() {
   const [aiError, setAiError] = useState("");
 
   const [saveFlash, setSaveFlash] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   const [budgetInput, setBudgetInput] = useState("");
   const [useCase, setUseCase] = useState("gaming");
@@ -54,7 +52,7 @@ export default function PCBuildTool() {
   const [catalog, setCatalog] = useState(null);
   const [catalogError, setCatalogError] = useState("");
 
-  const [mode, setMode] = useState("plan"); // plan | current
+  const [mode, setMode] = useState("plan");
   const [currentPC, setCurrentPC] = useState(emptyBuild());
 
   const activeBuild = mode === "plan" ? build : currentPC;
@@ -67,11 +65,22 @@ export default function PCBuildTool() {
         return res.json();
       })
       .then(setCatalog)
-      .catch(() => setCatalogError("Couldn't load the parts catalog. Make sure the backend server is running (npm run server)."));
+      .catch(() => setCatalogError("Couldn't load the parts catalog. Make sure the backend server is running."));
   }, []);
 
   useEffect(() => {
-    listProfiles().then(setKnownProfiles);
+    fetchCurrentUser().then((username) => {
+      if (username) {
+        setActiveUser(username);
+        fetchProfileData().then((data) => {
+          if (data) {
+            setBuild({ ...emptyBuild(), ...data.build });
+            setCurrentPC({ ...emptyBuild(), ...data.currentPC });
+          }
+        });
+      }
+      setAuthChecked(true);
+    });
   }, []);
 
   const compat = useMemo(() => checkCompatibility(activeBuild), [activeBuild]);
@@ -80,51 +89,43 @@ export default function PCBuildTool() {
     [activeBuild]
   );
 
-  const handleCreateProfile = async () => {
-    const name = usernameInput.trim();
-    if (!name) { setGateError("Enter a profile name."); return; }
-    if (pinInput.length < 4) { setGateError("PIN needs at least 4 digits."); return; }
-    const existing = await loadProfile(name);
-    if (existing) { setGateError("That profile already exists. Choose sign in instead."); return; }
-    const data = { pin: pinInput, build: emptyBuild(), currentPC: emptyBuild() };
-    await saveProfile(name, data);
-    setActiveUser(name);
-    setBuild(emptyBuild());
-    setCurrentPC(emptyBuild());
-    setStage("dashboard");
-    setKnownProfiles((prev) => [...prev, name]);
-  };
-
-  const handleSignIn = async () => {
-    const name = usernameInput.trim();
-    if (!name) { setGateError("Enter a profile name."); return; }
-    const data = await loadProfile(name);
-    if (!data) { setGateError("No profile with that name yet. Switch to create one."); return; }
-    if (data.pin !== pinInput) { setGateError("Incorrect PIN."); return; }
-    setActiveUser(name);
-    setBuild({ ...emptyBuild(), ...data.build });
-    setCurrentPC({ ...emptyBuild(), ...(data.currentPC || {}) });
-    setStage("dashboard");
-  };
-
   const handleSaveBuild = useCallback(async () => {
-    if (!activeUser) return;
-    const data = await loadProfile(activeUser);
-    await saveProfile(activeUser, { ...data, build, currentPC });
-    setSaveFlash(true);
-    setTimeout(() => setSaveFlash(false), 1400);
+    if (!activeUser) {
+      setPendingSaveAfterAuth(true);
+      setAuthModalOpen(true);
+      return;
+    }
+    setSaveError("");
+    try {
+      await saveProfileData(build, currentPC);
+      setSaveFlash(true);
+      setTimeout(() => setSaveFlash(false), 1400);
+    } catch (err) {
+      setSaveError("Couldn't save. Try again in a moment.");
+    }
   }, [activeUser, build, currentPC]);
 
-  const handleSignOut = () => {
-    setStage("gate");
+  const handleAuthSuccess = async (username) => {
+    setActiveUser(username);
+    setAuthModalOpen(false);
+    const data = await fetchProfileData();
+    if (data && (Object.values(data.build).some(Boolean) || Object.values(data.currentPC).some(Boolean))) {
+      setBuild({ ...emptyBuild(), ...data.build });
+      setCurrentPC({ ...emptyBuild(), ...data.currentPC });
+    }
+    if (pendingSaveAfterAuth) {
+      setPendingSaveAfterAuth(false);
+      setTimeout(() => handleSaveBuild(), 0);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await authLogout();
     setActiveUser(null);
     setBuild(emptyBuild());
     setCurrentPC(emptyBuild());
     setMode("plan");
     setAiText("");
-    setUsernameInput("");
-    setPinInput("");
-    setGateError("");
   };
 
   const selectPart = (category, part) => {
@@ -183,8 +184,6 @@ export default function PCBuildTool() {
     const prompt = `You are a PC building assistant. Here is ${label}:\n${summary}\n\nTotal: $${total}. Estimated power draw: ${compat.estimatedDraw}W.\n${compat.issues.length ? `Known compatibility issues: ${compat.issues.join(" ")}` : "No compatibility issues detected so far."}${ownedContext}\n\nGive concise, practical recommendations: what to add next given what's missing, whether anything is a bottleneck or mismatched for the apparent use case (e.g. a strong GPU paired with a weak CPU), and one or two specific upgrade suggestions. Keep it under 150 words, plain text, no markdown headers.`;
 
     try {
-      // Calls our own backend (server/index.js), which holds the Anthropic
-      // API key and forwards the request — the browser never sees the key.
       const response = await fetch(`${API_BASE}/api/recommend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -200,26 +199,6 @@ export default function PCBuildTool() {
     }
   };
 
-  /* ------------------- RENDER: GATE ------------------- */
-  if (stage === "gate") {
-    return (
-      <ProfileGate
-        gateMode={gateMode}
-        setGateMode={setGateMode}
-        usernameInput={usernameInput}
-        setUsernameInput={setUsernameInput}
-        pinInput={pinInput}
-        setPinInput={setPinInput}
-        gateError={gateError}
-        setGateError={setGateError}
-        knownProfiles={knownProfiles}
-        handleSignIn={handleSignIn}
-        handleCreateProfile={handleCreateProfile}
-      />
-    );
-  }
-
-  /* ------------------- RENDER: DASHBOARD ------------------- */
   if (catalogError) {
     return (
       <div style={styles.page}>
@@ -250,23 +229,42 @@ export default function PCBuildTool() {
     <div style={styles.page}>
       <FontLoad />
       <GlobalAnimations />
+      {authModalOpen && (
+        <AuthModal
+          onSuccess={handleAuthSuccess}
+          onClose={() => { setAuthModalOpen(false); setPendingSaveAfterAuth(false); }}
+        />
+      )}
       <div style={styles.shell}>
-        {/* Top bar */}
         <div style={styles.topBar}>
           <div style={styles.topBarLeft}>
             <CircuitBoard size={22} color="var(--copper)" strokeWidth={1.5} />
             <span style={styles.brand}>Bench</span>
           </div>
           <div style={styles.topBarRight}>
-            <span style={styles.userChip}><User size={13} /> {activeUser}</span>
-            <button style={styles.iconBtn} onClick={handleSaveBuild} title="Save build">
-              {saveFlash ? "Saved" : "Save"}
-            </button>
-            <button style={styles.iconBtn} onClick={handleSignOut} title="Sign out">
-              <LogOut size={14} />
-            </button>
+            {authChecked && activeUser ? (
+              <>
+                <span style={styles.userChip}><User size={13} /> {activeUser}</span>
+                <button style={styles.iconBtn} onClick={handleSaveBuild} title="Save build">
+                  {saveFlash ? "Saved" : "Save"}
+                </button>
+                <button style={styles.iconBtn} onClick={handleSignOut} title="Sign out">
+                  <LogOut size={14} />
+                </button>
+              </>
+            ) : (
+              <>
+                <button style={styles.iconBtn} onClick={handleSaveBuild} title="Save build">
+                  {saveFlash ? "Saved" : "Save"}
+                </button>
+                <button style={styles.iconBtn} onClick={() => setAuthModalOpen(true)} title="Sign in">
+                  <LogIn size={14} /> Sign in
+                </button>
+              </>
+            )}
           </div>
         </div>
+        {saveError && <div style={styles.gateError}>{saveError}</div>}
 
         <ModeTabs mode={mode} setMode={setMode} />
 
